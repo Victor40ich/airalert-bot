@@ -1,61 +1,75 @@
+import os
 import asyncio
-import requests
+import aiohttp
 from aiogram import Bot
 from dotenv import load_dotenv
-import os
 
-# Завантажуємо змінні з .env
+# Завантажуємо змінні з .env або Railway Variables
 load_dotenv()
 
-TOKEN = os.getenv("BOT_TOKEN")        # Токен твого Telegram-бота
-CHAT_ID = os.getenv("CHAT_ID")        # ID користувача/каналу
-API_TOKEN = os.getenv("API_TOKEN")    # Токен від alerts.in.ua
-TARGET_DISTRICT = "Прилуцький район"  # Район для моніторингу
+TOKEN = os.getenv("BOT_TOKEN")
+CHAT_ID = os.getenv("CHAT_ID")
+API_TOKEN = os.getenv("API_TOKEN")
+TARGET_DISTRICT = "Прилуцький район"
 
-bot = Bot(token=TOKEN)
+bot = Bot(token=TOKEN, parse_mode="HTML")
 previous_alert = None
+
 
 async def check_alerts():
     global previous_alert
     url = f"https://api.alerts.in.ua/v1/alerts/active.json?token={API_TOKEN}"
 
-    while True:
-        try:
-            response = requests.get(url, timeout=10)
-            data = response.json()
+    async with aiohttp.ClientSession() as session:
+        while True:
+            try:
+                async with session.get(url, timeout=10) as response:
+                    if response.status != 200:
+                        print(f"[ERROR] HTTP {response.status}")
+                        await asyncio.sleep(30)
+                        continue
 
-            # Фільтруємо по Чернігівській області та Прилуцькому району
-            pryluky = next(
-                (a for a in data if 
-                 a.get("region") == "Чернігівська область" and 
-                 a.get("district") == TARGET_DISTRICT),
-                None
-            )
+                    data = await response.json()
 
-            if not pryluky:
-                print(f"[WARN] {TARGET_DISTRICT} не знайдено у відповіді API")
-                await asyncio.sleep(30)
-                continue
+                    # Фільтруємо по Чернігівській області та Прилуцькому району
+                    pryluky = next(
+                        (a for a in data if 
+                         a.get("region") == "Чернігівська область" and 
+                         a.get("district") == TARGET_DISTRICT),
+                        None
+                    )
 
-            alert = pryluky.get("alert", False)
+                    if not pryluky:
+                        print(f"[WARN] {TARGET_DISTRICT} не знайдено у відповіді API")
+                        await asyncio.sleep(30)
+                        continue
 
-            # Перевірка зміни стану
-            if alert != previous_alert:
-                previous_alert = alert
-                if alert:
-                    text = f"🚨 Повітряна тривога у {TARGET_DISTRICT}!"
-                else:
-                    text = f"✅ Відбій у {TARGET_DISTRICT}!"
-                await bot.send_message(CHAT_ID, text)
-                print(f"[INFO] {text}")
+                    alert = pryluky.get("alert", False)
 
-        except Exception as e:
-            print(f"[ERROR] {e}")
+                    # Якщо статус змінився → надсилаємо повідомлення
+                    if alert != previous_alert:
+                        previous_alert = alert
+                        if alert:
+                            text = f"🚨 Повітряна тривога у {TARGET_DISTRICT}!"
+                        else:
+                            text = f"✅ Відбій у {TARGET_DISTRICT}!"
+                        await bot.send_message(CHAT_ID, text)
+                        print(f"[INFO] {text}")
+                    else:
+                        print("[INFO] Стан не змінився.")
 
-        await asyncio.sleep(30)  # перевірка кожні 30 секунд
+            except Exception as e:
+                print(f"[EXCEPTION] {e}")
+
+            await asyncio.sleep(30)  # перевірка кожні 30 секунд
+
 
 async def main():
     await check_alerts()
 
+
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("⛔ Зупинено вручну")
