@@ -1,15 +1,11 @@
-import os
 import asyncio
 import aiohttp
 from aiogram import Bot
-from dotenv import load_dotenv
 
-# Завантажуємо змінні з .env або Railway Variables
-load_dotenv()
-
-TOKEN = os.getenv("BOT_TOKEN")
-CHAT_ID = os.getenv("CHAT_ID")
-API_TOKEN = os.getenv("API_TOKEN")
+# 👉 Тут впиши свої дані напряму
+TOKEN = "7928801571:AAElQ_J6qieo6pvggLwinsZd4Q6YiFBpXOc"
+CHAT_ID = "@ichnya"
+API_TOKEN = "b173d916643516264fe848bb2b1be6a503398488ab2203"
 TARGET_DISTRICT = "Прилуцький район"
 
 bot = Bot(token=TOKEN, parse_mode="HTML")
